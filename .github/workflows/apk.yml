@@ -30,7 +30,7 @@ jobs:
           # Configura o caminho do SDK padrão do Ubuntu runners
           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-          # build.gradle (raiz - atualizado para Gradle 8)
+          # build.gradle (raiz)
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.5.2' apply false
@@ -247,7 +247,7 @@ jobs:
       - name: Build APK with Gradle
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
-        run: gradle assembleDebug
+        run: gradle assembleDebug --stacktrace --info
 
       - name: Publish Release APK
         uses: softprops/action-gh-release@v1
