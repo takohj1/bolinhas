@@ -30,6 +30,7 @@ jobs:
 
           cp index.html app/src/main/assets/index.html
           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
+          echo "android.useAndroidX=true" > gradle.properties
 
           cat << 'EOF' > build.gradle
           plugins {
