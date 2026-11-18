@@ -244,10 +244,13 @@ jobs:
           }
           EOF
 
+      - name: Setup Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.7
+
       - name: Build APK with Gradle
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
-        run: gradle assembleDebug --stacktrace --info
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Publish Release APK
         uses: softprops/action-gh-release@v1
