@@ -5,12 +5,10 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,25 +16,14 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
           java-version: '17'
+          distribution: 'temurin'
 
       - name: Create Android Project Structure
         run: |
+          mkdir -p app/src/main/java/com/takohj1/bolinhas
           mkdir -p app/src/main/assets
-          mkdir -p app/src/main/java/com/bolinhas/game
-          mkdir -p app/src/main/res/values
-          mkdir -p app/src/main/res/drawable
-
           cp index.html app/src/main/assets/index.html
-          echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
-          echo "android.useAndroidX=true" > gradle.properties
-
-          cat << 'EOF' > build.gradle
-          plugins {
-              id 'com.android.application' version '8.5.2' apply false
-          }
-          EOF
 
           cat << 'EOF' > settings.gradle
           pluginManagement {
@@ -47,7 +34,7 @@ jobs:
               }
           }
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
               repositories {
                   google()
                   mavenCentral()
@@ -57,63 +44,56 @@ jobs:
           include ':app'
           EOF
 
+          cat << 'EOF' > build.gradle
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
           }
+
           android {
-              namespace 'com.bolinhas.game'
+              namespace 'com.takohj1.bolinhas'
               compileSdk 34
+
               defaultConfig {
-                  applicationId "com.bolinhas.game"
-                  minSdk 26
+                  applicationId "com.takohj1.bolinhas"
+                  minSdk 24
                   targetSdk 34
                   versionCode 1
                   versionName "1.0"
               }
+
               buildTypes {
                   release {
                       minifyEnabled false
                   }
               }
+
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_17
                   targetCompatibility JavaVersion.VERSION_17
               }
           }
-          dependencies {
-              implementation 'androidx.appcompat:appcompat:1.6.1'
-          }
-          EOF
-
-          cat << 'EOF' > app/src/main/res/drawable/ic_launcher.xml
-          <vector xmlns:android="http://schemas.android.com/apk/res/android"
-              android:width="108dp"
-              android:height="108dp"
-              android:viewportWidth="108"
-              android:viewportHeight="108">
-              <path
-                  android:fillColor="#1E1E2E"
-                  android:pathData="M0,0h108v108h-108z"/>
-              <path
-                  android:fillColor="#FF4081"
-                  android:pathData="M54,24A30,30 0 1,1 54,84A30,30 0 1,1 54,24Z"/>
-          </vector>
           EOF
 
           cat << 'EOF' > app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.VIBRATE" />
+
               <application
-                  android:allowBackup="true"
-                  android:icon="@drawable/ic_launcher"
                   android:label="Bolinhas Balalaescas"
-                  android:supportsRtl="true"
-                  android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+                  android:hardwareAccelerated="true"
+                  android:theme="@android:style/Theme.NoTitleBar.Fullscreen">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
+                      android:screenOrientation="portrait"
                       android:configChanges="orientation|screenSize|keyboardHidden">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -124,164 +104,124 @@ jobs:
           </manifest>
           EOF
 
-          cat << 'EOF' > app/src/main/java/com/bolinhas/game/MainActivity.java
-          package com.bolinhas.game;
+          cat << 'EOF' > app/src/main/java/com/takohj1/bolinhas/MainActivity.java
+          package com.takohj1.bolinhas;
 
-          import android.content.ClipData;
+          import android.app.Activity;
+          import android.content.Context;
           import android.content.Intent;
           import android.net.Uri;
           import android.os.Build;
           import android.os.Bundle;
           import android.os.VibrationEffect;
           import android.os.Vibrator;
+          import android.view.View;
+          import android.view.WindowManager;
           import android.webkit.JavascriptInterface;
           import android.webkit.ValueCallback;
           import android.webkit.WebChromeClient;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
-          import androidx.activity.result.ActivityResultLauncher;
-          import androidx.activity.result.contract.ActivityResultContracts;
-          import androidx.appcompat.app.AppCompatActivity;
 
-          public class MainActivity extends AppCompatActivity {
-              private WebView webView;
-              private ValueCallback<Uri[]> filePathCallback;
-              private ActivityResultLauncher<Intent> fileChooserLauncher;
+          public class MainActivity extends Activity {
+              private ValueCallback<Uri[]> fileCallback;
+              private static final int FILE_REQ = 1001;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+                  getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                  getWindow().getDecorView().setSystemUiVisibility(
+                      View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                      | View.SYSTEM_UI_FLAG_FULLSCREEN
+                      | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                  );
 
-                  webView = new WebView(this);
-                  setContentView(webView);
+                  WebView wv = new WebView(this);
+                  WebSettings s = wv.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setDatabaseEnabled(true);
+                  s.setAllowFileAccess(true);
+                  s.setMediaPlaybackRequiresUserGesture(false);
 
-                  WebSettings settings = webView.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
-                  settings.setDatabaseEnabled(true);
-                  settings.setAllowFileAccess(true);
-                  settings.setAllowContentAccess(true);
-                  settings.setMediaPlaybackRequiresUserGesture(false);
-
-                  webView.setWebViewClient(new WebViewClient());
-
-                  webView.setWebChromeClient(new WebChromeClient() {
+                  wv.addJavascriptInterface(new WebAppInterface(this), "Android");
+                  wv.setWebViewClient(new WebViewClient());
+                  wv.setWebChromeClient(new WebChromeClient() {
                       @Override
-                      public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
-                          if (MainActivity.this.filePathCallback != null) {
-                              MainActivity.this.filePathCallback.onReceiveValue(null);
-                          }
-                          MainActivity.this.filePathCallback = filePathCallback;
-
-                          Intent intent = fileChooserParams.createIntent();
+                      public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                          if (fileCallback != null) fileCallback.onReceiveValue(null);
+                          fileCallback = callback;
+                          Intent intent = params.createIntent();
                           try {
-                              fileChooserLauncher.launch(intent);
+                              startActivityForResult(intent, FILE_REQ);
                           } catch (Exception e) {
-                              MainActivity.this.filePathCallback = null;
+                              fileCallback = null;
                               return false;
                           }
                           return true;
                       }
                   });
 
-                  webView.addJavascriptInterface(new WebAppInterface(this), "Android");
-
-                  fileChooserLauncher = registerForActivityResult(
-                      new ActivityResultContracts.StartActivityForResult(),
-                      result -> {
-                          if (filePathCallback == null) return;
-                          Uri[] results = null;
-                          if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                              Intent data = result.getData();
-                              if (data.getDataString() != null) {
-                                  results = new Uri[]{Uri.parse(data.getDataString())};
-                              } else if (data.getClipData() != null) {
-                                  ClipData clipData = data.getClipData();
-                                  results = new Uri[clipData.getItemCount()];
-                                  for (int i = 0; i < clipData.getItemCount(); i++) {
-                                      results[i] = clipData.getItemAt(i).getUri();
-                                  }
-                              }
-                          }
-                          filePathCallback.onReceiveValue(results);
-                          filePathCallback = null;
-                      }
-                  );
-
-                  webView.loadUrl("file:///android_asset/index.html");
-              }
-
-              public class WebAppInterface {
-                  AppCompatActivity mContext;
-
-                  WebAppInterface(AppCompatActivity c) {
-                      mContext = c;
-                  }
-
-                  @JavascriptInterface
-                  public void vib(String csv, int amp) {
-                      try {
-                          Vibrator v = (Vibrator) mContext.getSystemService(VIBRATOR_SERVICE);
-                          if (v == null || !v.hasVibrator()) return;
-                          int safeAmp = Math.max(1, Math.min(255, amp));
-                          String[] parts = (csv != null ? csv : "40").split(",");
-                          if (parts.length <= 1) {
-                              long dur = 40;
-                              try { dur = Long.parseLong(parts[0].trim()); } catch (Exception ignored) {}
-                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                  v.vibrate(VibrationEffect.createOneShot(Math.max(1, dur), safeAmp));
-                              } else {
-                                  v.vibrate(Math.max(1, dur));
-                              }
-                          } else {
-                              long[] timings = new long[parts.length];
-                              int[] amps = new int[parts.length];
-                              for (int i = 0; i < parts.length; i++) {
-                                  long t = 0;
-                                  try { t = Long.parseLong(parts[i].trim()); } catch (Exception ignored) {}
-                                  timings[i] = Math.max(0, t);
-                                  amps[i] = (i % 2 == 0) ? safeAmp : 0;
-                              }
-                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                  v.vibrate(VibrationEffect.createWaveform(timings, amps, -1));
-                              } else {
-                                  v.vibrate(timings, -1);
-                              }
-                          }
-                      } catch (Exception ignored) {}
-                  }
+                  setContentView(wv);
+                  wv.loadUrl("file:///android_asset/index.html");
               }
 
               @Override
-              public void onBackPressed() {
-                  if (webView.canGoBack()) {
-                      webView.goBack();
-                  } else {
-                      super.onBackPressed();
+              protected void onActivityResult(int req, int res, Intent data) {
+                  if (req == FILE_REQ && fileCallback != null) {
+                      fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(res, data));
+                      fileCallback = null;
+                  }
+                  super.onActivityResult(req, res, data);
+              }
+
+              public static class WebAppInterface {
+                  private final Context ctx;
+                  WebAppInterface(Context c) { this.ctx = c; }
+
+                  @JavascriptInterface
+                  public void vib(String patternCsv, int amplitude) {
+                      Vibrator v = (Vibrator) ctx.getSystemService(Context.VIBRATOR_SERVICE);
+                      if (v == null || !v.hasVibrator()) return;
+                      String[] parts = patternCsv.split(",");
+                      if (parts.length == 1) {
+                          long ms = Long.parseLong(parts[0].trim());
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              int amp = Math.max(1, Math.min(255, amplitude));
+                              v.vibrate(VibrationEffect.createOneShot(ms, amp));
+                          } else {
+                              v.vibrate(ms);
+                          }
+                      } else {
+                          long[] timings = new long[parts.length + 1];
+                          timings[0] = 0;
+                          for (int i = 0; i < parts.length; i++) {
+                              timings[i + 1] = Long.parseLong(parts[i].trim());
+                          }
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                              v.vibrate(VibrationEffect.createWaveform(timings, -1));
+                          } else {
+                              v.vibrate(timings, -1);
+                          }
+                      }
                   }
               }
           }
           EOF
 
-      - name: Setup Gradle Wrapper
+      - name: Setup Gradle Wrapper 8.9
         run: |
-          gradle wrapper --gradle-version 8.7
+          gradle wrapper --gradle-version 8.9
           chmod +x gradlew
 
       - name: Build APK with Gradle
-        env:
-          ANDROID_HOME: /usr/local/lib/android/sdk
-        run: |
-          ./gradlew assembleDebug
-          cp app/build/outputs/apk/debug/app-debug.apk bolinhas-balalaescas.apk
+        run: ./gradlew assembleDebug
 
-      - name: Publish Release APK
-        uses: softprops/action-gh-release@v2
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: bolinhas-balalaescas.apk
-          tag_name: v1.0.apk
-          name: Bolinhas Balalaescas v1.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: Bolinhas-Balalaescas-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
           
