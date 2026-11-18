@@ -5,6 +5,9 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,24 +26,17 @@ jobs:
           mkdir -p app/src/main/assets
           mkdir -p app/src/main/java/com/bolinhas/game
           mkdir -p app/src/main/res/values
-          
-          # Copia o seu index.html para os assets do Android
-          cp index.html app/src/main/assets/index.html
+          mkdir -p app/src/main/res/drawable
 
-          # Configura o caminho do SDK padrão do Ubuntu runners
+          cp index.html app/src/main/assets/index.html
           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-          # build.gradle (raiz)
           cat << 'EOF' > build.gradle
           plugins {
               id 'com.android.application' version '8.5.2' apply false
           }
-          task clean(type: Delete) {
-              delete rootProject.buildDir
-          }
           EOF
 
-          # settings.gradle
           cat << 'EOF' > settings.gradle
           pluginManagement {
               repositories {
@@ -60,7 +56,6 @@ jobs:
           include ':app'
           EOF
 
-          # app/build.gradle
           cat << 'EOF' > app/build.gradle
           plugins {
               id 'com.android.application'
@@ -87,20 +82,32 @@ jobs:
           }
           dependencies {
               implementation 'androidx.appcompat:appcompat:1.6.1'
-              implementation 'com.google.android.material:material:1.10.0'
           }
           EOF
 
-          # AndroidManifest.xml
+          cat << 'EOF' > app/src/main/res/drawable/ic_launcher.xml
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#1E1E2E"
+                  android:pathData="M0,0h108v108h-108z"/>
+              <path
+                  android:fillColor="#FF4081"
+                  android:pathData="M54,24A30,30 0 1,1 54,84A30,30 0 1,1 54,24Z"/>
+          </vector>
+          EOF
+
           cat << 'EOF' > app/src/main/AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.VIBRATE" />
               <application
                   android:allowBackup="true"
-                  android:icon="@mipmap/ic_launcher"
+                  android:icon="@drawable/ic_launcher"
                   android:label="Bolinhas Balalaescas"
-                  android:roundIcon="@mipmap/ic_launcher_round"
                   android:supportsRtl="true"
                   android:theme="@style/Theme.AppCompat.Light.NoActionBar">
                   <activity
@@ -116,14 +123,6 @@ jobs:
           </manifest>
           EOF
 
-          # strings.xml
-          cat << 'EOF' > app/src/main/res/values/strings.xml
-          <resources>
-              <string name="app_name">Bolinhas Balalaescas</string>
-          </resources>
-          EOF
-
-          # MainActivity.java (WebView + FileChooser + JS Bridge de Vibração)
           cat << 'EOF' > app/src/main/java/com/bolinhas/game/MainActivity.java
           package com.bolinhas.game;
 
@@ -134,12 +133,12 @@ jobs:
           import android.os.Bundle;
           import android.os.VibrationEffect;
           import android.os.Vibrator;
+          import android.webkit.JavascriptInterface;
           import android.webkit.ValueCallback;
           import android.webkit.WebChromeClient;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
           import android.webkit.WebViewClient;
-          import android.webkit.JavascriptInterface;
           import androidx.activity.result.ActivityResultLauncher;
           import androidx.activity.result.contract.ActivityResultContracts;
           import androidx.appcompat.app.AppCompatActivity;
@@ -152,7 +151,7 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
-                  
+
                   webView = new WebView(this);
                   setContentView(webView);
 
@@ -162,6 +161,7 @@ jobs:
                   settings.setDatabaseEnabled(true);
                   settings.setAllowFileAccess(true);
                   settings.setAllowContentAccess(true);
+                  settings.setMediaPlaybackRequiresUserGesture(false);
 
                   webView.setWebViewClient(new WebViewClient());
 
@@ -199,7 +199,7 @@ jobs:
                                   ClipData clipData = data.getClipData();
                                   results = new Uri[clipData.getItemCount()];
                                   for (int i = 0; i < clipData.getItemCount(); i++) {
-                                      results[i] = clipData.getUri(i);
+                                      results[i] = clipData.getItemAt(i).getUri();
                                   }
                               }
                           }
@@ -222,14 +222,33 @@ jobs:
                   public void vib(String csv, int amp) {
                       try {
                           Vibrator v = (Vibrator) mContext.getSystemService(VIBRATOR_SERVICE);
-                          if (v != null && v.hasVibrator()) {
+                          if (v == null || !v.hasVibrator()) return;
+                          int safeAmp = Math.max(1, Math.min(255, amp));
+                          String[] parts = (csv != null ? csv : "40").split(",");
+                          if (parts.length <= 1) {
+                              long dur = 40;
+                              try { dur = Long.parseLong(parts[0].trim()); } catch (Exception ignored) {}
                               if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                  v.vibrate(VibrationEffect.createOneShot(50, Math.max(1, Math.min(255, amp))));
+                                  v.vibrate(VibrationEffect.createOneShot(Math.max(1, dur), safeAmp));
                               } else {
-                                  v.vibrate(50);
+                                  v.vibrate(Math.max(1, dur));
+                              }
+                          } else {
+                              long[] timings = new long[parts.length];
+                              int[] amps = new int[parts.length];
+                              for (int i = 0; i < parts.length; i++) {
+                                  long t = 0;
+                                  try { t = Long.parseLong(parts[i].trim()); } catch (Exception ignored) {}
+                                  timings[i] = Math.max(0, t);
+                                  amps[i] = (i % 2 == 0) ? safeAmp : 0;
+                              }
+                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                  v.vibrate(VibrationEffect.createWaveform(timings, amps, -1));
+                              } else {
+                                  v.vibrate(timings, -1);
                               }
                           }
-                      } catch (Exception e) {}
+                      } catch (Exception ignored) {}
                   }
               }
 
@@ -252,12 +271,14 @@ jobs:
       - name: Build APK with Gradle
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
-        run: ./gradlew assembleDebug --stacktrace
+        run: |
+          ./gradlew assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk bolinhas-balalaescas.apk
 
       - name: Publish Release APK
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/debug/app-debug.apk
+          files: bolinhas-balalaescas.apk
           tag_name: v1.0.apk
           name: Bolinhas Balalaescas v1.0
         env:
