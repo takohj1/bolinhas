@@ -245,7 +245,9 @@ jobs:
           EOF
 
       - name: Setup Gradle Wrapper
-        run: gradle wrapper --gradle-version 8.7
+        run: |
+          gradle wrapper --gradle-version 8.7
+          chmod +x gradlew
 
       - name: Build APK with Gradle
         env:
