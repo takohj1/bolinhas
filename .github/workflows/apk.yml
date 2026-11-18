@@ -30,22 +30,10 @@ jobs:
           # Configura o caminho do SDK padrão do Ubuntu runners
           echo "sdk.dir=/usr/local/lib/android/sdk" > local.properties
 
-          # build.gradle (raiz)
+          # build.gradle (raiz - atualizado para Gradle 8)
           cat << 'EOF' > build.gradle
-          buildscript {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-              dependencies {
-                  classpath 'com.android.tools.build:gradle:8.5.2'
-              }
-          }
-          allprojects {
-              repositories {
-                  google()
-                  mavenCentral()
-              }
+          plugins {
+              id 'com.android.application' version '8.5.2' apply false
           }
           task clean(type: Delete) {
               delete rootProject.buildDir
@@ -62,7 +50,7 @@ jobs:
               }
           }
           dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
               repositories {
                   google()
                   mavenCentral()
